@@ -10,16 +10,23 @@ Cards are one markdown file each, under
 is a projection of those files. The skills let you create and update cards
 conversationally instead of hand-editing markdown.
 
+> **Design & rationale:** see [DESIGN.md](DESIGN.md) — the card model, the milestone board,
+> the credibility/validation contract, per-branch regression tracking, and the skill roadmap.
+
 ## Skills
 
 | skill | say |
 |---|---|
-| `card-add` | "add a card for …", "track this as a task" |
-| `card-status` | "mark m3-o0-lowering done", "X is blocked" |
-| `card-link` | "X depends on Y", "make X a subtask of master Z" |
-| `card-run` | "log a fail on m3-checkpoint-load: \<cmd\>", "this passed" |
+| `card-add` | "add a card for …", "track this as a new task" (a **new item**) |
+| `card-step` | "X is blocked by …", "debug the failure in X", "next stage of X" (a **step**, incl. debug — not a new card) |
+| `card-verify` | "add a verification script for X", "log a fail on X: \<cmd\>", "this passed on dev-06-15" |
+| `card-edit` | "mark m3-o0-lowering done", "X depends on Y", "make X a subtask of Z", "reassign X" |
 
-(More skills for maintaining the board + cards will be added over time.)
+**Core model:** one md file = one work item; its sub-stages and debugging are `steps`
+(a card stack), not separate files. Every non-master card needs a `validation`
+**verification script** (the close-gate + per-branch regression probe). See [DESIGN.md](DESIGN.md).
+
+(More skills — e.g. `add-dev-branch` automation — will be added over time.)
 
 ## One-time install
 
@@ -51,8 +58,9 @@ gh auth login
 
 ```
 .claude-plugin/marketplace.json          # marketplace manifest
+DESIGN.md                                # the why: card model, board, credibility, regression
 plugins/project-tracker/
   .claude-plugin/plugin.json             # plugin manifest
-  skills/{card-add,card-status,card-link,card-run}/SKILL.md
-  scripts/{new_card,set_status,build_graph}.py   # helpers (referenced via ${CLAUDE_PLUGIN_ROOT})
+  skills/{card-add,card-step,card-verify,card-edit}/SKILL.md
+  scripts/{new_card,add_step,card_edit,regen}.py   # helpers (referenced via ${CLAUDE_PLUGIN_ROOT})
 ```
