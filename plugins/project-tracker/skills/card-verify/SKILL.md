@@ -39,6 +39,25 @@ A card's credibility lives in two linked things, both managed here:
        note: "<short result>"
    ```
    Quote `cmd`/`note` (colons). If there's no `runs:` key, add one.
+
+   **Persisting a DAG / dashboard run as a durable artifact.** When the outcome came from a
+   `user_run_dag_tests.sh` / `test.jsonnet` run, the `artifact_root` is huge (~GB) and lives
+   in `dump/` under quota — it WILL be cleaned, and any `btd-dashboard…` URL into it rots.
+   Save only the small proof, then point `artifact:` at the saved copy:
+   - **Where:** `<project>/verification/<card-id>_<YYYY-MM-DD>/` (a feiw-owned, group-writable
+     home). Do **not** use any ad-hoc `<project>/artifacts/` — those may be owned by another
+     user with no group-write. `mkdir -p` it then `chmod g+w` the dir.
+   - **What to copy (keep it < ~1 MB):** the dashboard JSON (`…/infra_logs/dashboard_*.json`,
+     ~10 KB — source of truth for per-test pass/fail) + its `*_btd_url` file + each test's
+     `apps_persistent/<test>/<node>/run.0.log` (**gzip** any that aren't already `.gz`).
+   - **README.md** in the dir: commit (full SHA), branch, date, the exact run `cmd`, a
+     pass/fail table read from the dashboard JSON's `lists[].tests[].state`, and a one-line
+     link back to `../../cards/<id>.md`.
+   - Then set the run entry's `artifact:` to that dir (not the `dump/` path).
+   - **Derive the `validation.cmd`** from the `// RUN:` header at the top of `test.jsonnet`
+     (and confirm the result/branch/SHA against the matching `.test_history.json` row).
+   - Only flip `done` if the dashboard shows **all** tests `PASSED`; partial → keep
+     `in_progress` and say which node is red.
 4. **Status:** a `fail` that blocks → consider `card-edit --status blocked` (or a `kind: debug`
    step via `card-step` if it's a per-branch regression). A `pass` that completes the card →
    `card-edit --status done` **only if** a real `validation` script + this passing run exist
