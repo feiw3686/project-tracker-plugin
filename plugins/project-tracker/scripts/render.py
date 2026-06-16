@@ -640,8 +640,8 @@ function stepCard(item, step, idx, total, isTop){
   el.innerHTML=
     `<div class="strip4" style="background:${col}"></div>`+
     `<div class="pad">`+
-      `<div class="ttl"><span class="ico">${icon}</span><span>${esc(step.name||item.title)}</span></div>`+
-      `<div class="itemref">${esc(item.title)}</div>`+
+      `<div class="ttl"><span class="ico">${icon}</span><span>${esc(item.title)}</span></div>`+
+      `<div class="itemref">${esc(step.name||item.title)}</div>`+
       (step.summary?`<div class="sum">${esc(step.summary)}</div>`:"")+
       `<div class="foot">${foot}</div>`+
     `</div>`+(isTop?vbarFor(item):"");
