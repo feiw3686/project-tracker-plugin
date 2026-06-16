@@ -26,7 +26,8 @@ the per-branch regression probe; until one exists it shows a red bottom strip.
 - `new_card.py` — scaffold a new card file from fields (forces group-writable 664).
 - `add_step.py` — append a step to a card's `steps[]` (optionally sync top-level status).
 - `card_edit.py` — surgically set status / parent / depends_on / metadata + bump `updated`.
-- `regen.py` — regenerate the board (runs the project's `build_project2.py`).
+- `render.py` — the board generator (single source; the project dir holds only data).
+- `regen.py` — regenerate a project's board (runs the sibling `render.py` against it).
 
 All scripts default `TRACKER_PROJECTS_ROOT` to the shared NFS notes tree
 (`/import/snvm-sc-scratch1/feiw/notes/projects`); override the env var for another location.

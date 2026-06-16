@@ -44,7 +44,7 @@ The whole point is to make status-tracking **effortless**: every required-format
 - **Validation block**: an *executable* close-gate contract — branch + command + pass criteria
   (see §4). Missing → a solid red bottom strip on the board.
 
-The canonical cards are the single source of truth: the board (`build_project2.py` →
+The canonical cards are the single source of truth: the board (`render.py` →
 `_project2.html`) is a pure projection that reads `cards/*.md` directly. No view keeps its own copy.
 
 ---
@@ -79,7 +79,7 @@ green/red/amber segment per dev branch (latest 3, `+N` for older) — so *status
 - HTML + JS landing page, rendered with a deterministic **CSS-grid swimlane** renderer (one
   milestone = one horizontal lane; cards wrap left→right within a lane — "finite freedom").
   Chosen over Mermaid/dagre, which cannot do rich cards or the stack metaphor.
-- Auto-generated from the current state of all cards by `build_project2.py` (reads `cards/*.md`
+- Auto-generated from the current state of all cards by `render.py` (reads `cards/*.md`
   directly; sorts each group by `order`). Pure DOM/CSS/SVG, no CDN.
 - Hosted with **Markserv** so every file is browsable and directly editable by path.
 
@@ -178,7 +178,8 @@ plus a regen helper; several earlier ideas folded in (see notes).
 | `card-step` | add/update a **step** in `steps[]` (sub-stage or `kind: debug` blocker) — the stack-of-steps model. Subsumes `card-from-debug`, `card-derive`, `card-regression`. | ✅ |
 | `card-verify` | set/replace the **verification script** (`validation`) AND log a branch-tagged **run** (cmd/artifact/sha/result). Subsumes `card-run` + `card-validate` + run-the-check. | ✅ |
 | `card-edit` | generic fix: status (with **close-gate** on `→ done`), `depends_on`/`parent`, owner/summary/priority. Subsumes `card-status` + `card-link` + `card-modify` + `assign-card-to`. | ✅ |
-| `regen.py` (helper) | project all `cards/*.md` → the board (`build_project2.py` → `_project2.html`). Single source; no view keeps its own copy. | ✅ |
+| `render.py` (engine) | the board generator: all `cards/*.md` + `_project.md` config → `_project2.html`. The ONE copy; lives in the plugin, runs against a data-only project dir. | ✅ |
+| `regen.py` (helper) | locate the sibling `render.py` and run it against a project. Single source; no per-project copy of the renderer can diverge. | ✅ |
 | `add-dev-branch` | on each `main` resync: register the new dev branch, re-run every card's verification script, log branch-tagged runs, add a `kind: debug` step for any regression. | ❌ (deferred) |
 | `start-project` | scaffold a new tracker directory + schema + template card. | ❌ |
 

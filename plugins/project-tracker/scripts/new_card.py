@@ -2,7 +2,7 @@
 """Scaffold a new tracker card and regenerate the project's board.
 
 Writes <project>/cards/<id>.md with valid frontmatter, then regenerates the board
-(build_project2.py via regen.py). Both humans and the card-add skill can call this
+(render.py via regen.py). Both humans and the card-add skill can call this
 for the mechanical part; the skill adds the judgement (id, summary, deps).
 
 Example:
