@@ -536,6 +536,9 @@ a{color:#2563eb;text-decoration:none} a:hover{text-decoration:underline}
   font-size:11px;border:1px solid var(--line);border-radius:6px;padding:3px 8px;background:#f8fafc;color:#475569}
 #drawer .dhead .copylink:hover{background:#eef2ff;color:#4338ca;border-color:#c7d2fe}
 #drawer .dhead .copylink.copied{background:var(--done);color:#fff;border-color:var(--done)}
+#drawer .dhead a.copylink{text-decoration:none}
+#drawer .dhead .dlinks{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px}
+#drawer .dhead .dlinks .copylink{margin-top:0}
 #drawer .meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
 #drawer .dbody{padding:14px 16px;overflow:auto}
 #drawer h3{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:16px 0 6px}
@@ -561,7 +564,7 @@ a{color:#2563eb;text-decoration:none} a:hover{text-decoration:underline}
 
 <div id="scrim" onclick="closeDrawer()"></div>
 <div id="drawer">
-  <div class="dhead"><span class="x" onclick="closeDrawer()">×</span><h2 id="d-title"></h2><div class="meta" id="d-meta"></div><span class="copylink" id="d-copylink" onclick="copyCardLink()"><span>🔗</span><span id="d-copylink-label">Copy link</span></span></div>
+  <div class="dhead"><span class="x" onclick="closeDrawer()">×</span><h2 id="d-title"></h2><div class="meta" id="d-meta"></div><div class="dlinks"><span class="copylink" id="d-copylink" onclick="copyCardLink()"><span>🔗</span><span id="d-copylink-label">Copy link</span></span><a class="copylink" id="d-opensrc" target="_blank"><span>📄</span><span>open .md</span></a><span class="copylink" id="d-copypath" onclick="copyCardPath()"><span>📋</span><span id="d-copypath-label">Copy md path</span></span></div></div>
   <div class="dbody" id="d-body"></div>
 </div>
 
@@ -569,6 +572,7 @@ a{color:#2563eb;text-decoration:none} a:hover{text-decoration:underline}
 const CARDS = __PAYLOAD__;
 const MILESTONES = __MILESTONES__;
 const CARDS_DIR = "__CARDS_DIR__";
+const CARDS_ABS = "__CARDS_ABS__";   // absolute filesystem path of the cards/ dir (for "copy md path")
 const PR_URL_BASE = "__PR_URL_BASE__";
 
 const STATUS_LABELS = ["todo","ready","in_progress","blocked","done","dropped"];
@@ -905,7 +909,6 @@ function openDrawer(id){
   if(c.links.doc) linkbits.push(`<a href="${esc(rebase(c.links.doc))}" target="_blank">${/report/i.test(c.links.doc)?"report":"doc"}</a>`);
   if(c.links.slack) linkbits.push(`<a href="${esc(c.links.slack)}" target="_blank">slack</a>`);
   if(c.links.url) linkbits.push(`<a href="${esc(c.links.url)}" target="_blank">link</a>`);
-  if(CARDS_DIR) linkbits.push(`<a href="${CARDS_DIR}/${esc(c.id)}.md" target="_blank">open source .md</a>`);
   if(linkbits.length) h+=`<h3>links</h3><div class="kv">${linkbits.join(" · ")}</div>`;
   if(c.body){
     const bodyHtml=esc(c.body)
@@ -917,6 +920,12 @@ function openDrawer(id){
   // reset the copy-link button to its default state for this card
   const cl=document.getElementById("d-copylink"); cl.classList.remove("copied");
   document.getElementById("d-copylink-label").textContent="Copy link";
+  // open-source-.md link (markserv URL) + copy-md-path button (filesystem path), per card
+  const osl=document.getElementById("d-opensrc");
+  if(CARDS_DIR){osl.href=CARDS_DIR+"/"+encodeURIComponent(id)+".md";osl.style.display="";}else{osl.style.display="none";}
+  const cp=document.getElementById("d-copypath"); cp.classList.remove("copied");
+  document.getElementById("d-copypath-label").textContent="Copy md path";
+  if(CARDS_ABS){cp.style.display="";cp.title=cardPathFor(id);}else{cp.style.display="none";}
   document.getElementById("scrim").classList.add("on");
   document.getElementById("drawer").classList.add("on");
   pinned=id; drawEdges(id);   // pin arrows to the open card
@@ -936,6 +945,17 @@ function copyCardLink(){
   if(navigator.clipboard&&navigator.clipboard.writeText){
     navigator.clipboard.writeText(url).then(flashCopied,()=>{legacyCopy(url);flashCopied();});
   }else{legacyCopy(url);flashCopied();}
+}
+function cardPathFor(id){return CARDS_ABS?CARDS_ABS+"/"+id+".md":"";}
+function flashPathCopied(){const cp=document.getElementById("d-copypath");cp.classList.add("copied");
+  document.getElementById("d-copypath-label").textContent="Path copied";
+  setTimeout(()=>{cp.classList.remove("copied");document.getElementById("d-copypath-label").textContent="Copy md path";},1500);}
+function copyCardPath(){
+  if(!pinned) return;
+  const p=cardPathFor(pinned); if(!p) return;
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(p).then(flashPathCopied,()=>{legacyCopy(p);flashPathCopied();});
+  }else{legacyCopy(p);flashPathCopied();}
 }
 function closeDrawer(){document.getElementById("scrim").classList.remove("on");document.getElementById("drawer").classList.remove("on");pinned=null;clearEdges();history.replaceState(null,"",location.pathname);}
 document.addEventListener("keydown",e=>{if(e.key==="Escape")closeDrawer();});
@@ -990,7 +1010,7 @@ openFromHash();   // deep-link: open the card named in the URL hash, if any
 """
 
 
-def build_html(cards, cards_dir, overview_html, config):
+def build_html(cards, cards_dir, overview_html, config, cards_abs=""):
     payload = json.dumps(cards, ensure_ascii=False)
     ms = json.dumps(config["milestones"])
     gen = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -999,6 +1019,7 @@ def build_html(cards, cards_dir, overview_html, config):
     html = html.replace("__PAYLOAD__", payload)
     html = html.replace("__MILESTONES__", ms)
     html = html.replace("__CARDS_DIR__", cards_dir)
+    html = html.replace("__CARDS_ABS__", cards_abs)
     html = html.replace("__GENERATED__", gen)
     html = html.replace("__TITLE__", _html.escape(config["title"], quote=False))
     html = html.replace("__PR_URL_BASE__", config["pr_url_base"])
@@ -1021,7 +1042,7 @@ def main():
     cards = load_cards(cards_path)
     overview = load_overview(project_md)
     config = load_project_config(project_md)
-    html = build_html(cards, args.cards_dir, overview, config)
+    html = build_html(cards, args.cards_dir, overview, config, cards_abs=cards_path)
     with open(out, "w", encoding="utf-8") as f:
         f.write(html)
 
