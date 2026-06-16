@@ -1,0 +1,10 @@
+{
+  "name": "project-tracker",
+  "version": "0.1.0",
+  "description": "Maintain a markdown card-graph project tracker from Claude Code: card-add, card-status, card-link, card-run (more board/maintenance skills to come).",
+  "author": {
+    "name": "Fei Wang",
+    "email": "fei.wang@sambanovasystems.com"
+  },
+  "homepage": "https://github.com/feiw3686/project-tracker-plugin"
+}

@@ -1,0 +1,14 @@
+{
+  "name": "project-tracker",
+  "owner": {
+    "name": "Fei Wang",
+    "email": "fei.wang@sambanovasystems.com"
+  },
+  "plugins": [
+    {
+      "name": "project-tracker",
+      "source": "./plugins/project-tracker",
+      "description": "Card-graph project tracker: create + maintain markdown cards and the milestone board from Claude Code."
+    }
+  ]
+}
