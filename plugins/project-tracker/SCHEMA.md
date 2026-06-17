@@ -80,9 +80,17 @@ superseded_by: null
   explicitly (`validation:\n  script: MISSING`); the board shows it on the card's
   **bottom strip**: solid red = no script; with a script, one green/red/amber
   segment per dev branch (latest 3, `+N` marker for older).
+  **The credibility bar for a PASS is re-runnability, not a frozen commit.** The
+  script must be *self-contained* — all inputs in-repo, no private paths — and pass
+  when anyone checks out the named `branch` and runs it. That, and only that, is what
+  makes a `done` credible: not an artifact path, not a commit hash.
 - **runs**: append a record per real run via the `card-verify` skill. The node face
   shows the latest run's `result` badge + date; hover shows its `cmd`/`artifact`.
-  Each run may carry a `branch:` (dev branch it ran on) — `runs` is a per-branch log.
+  Each run carries a `branch:` (dev branch it ran on) — `runs` is a per-branch log.
+  **Do NOT record commit hashes.** A SHA is false precision: runs happen on local,
+  often-unpushed, often-dirty trees, so a recorded hash points at code nobody else
+  can reproduce — worse than no hash, because it invites false trust. Credibility
+  comes from re-running the script on the named `branch`, not from pinning bytes.
 - **steps (one item, one file)**: a single work item = ONE md file. When that item
   has internal sub-stages (plan → compile → integrate → **debug a blocker**), record
   them as `steps:` entries — do **NOT** spin up a new card per sub-stage or per bug.

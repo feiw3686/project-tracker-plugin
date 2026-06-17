@@ -50,12 +50,13 @@ A card's credibility lives in two linked things, both managed here:
    - **What to copy (keep it < ~1 MB):** the dashboard JSON (`…/infra_logs/dashboard_*.json`,
      ~10 KB — source of truth for per-test pass/fail) + its `*_btd_url` file + each test's
      `apps_persistent/<test>/<node>/run.0.log` (**gzip** any that aren't already `.gz`).
-   - **README.md** in the dir: commit (full SHA), branch, date, the exact run `cmd`, a
+   - **README.md** in the dir: branch, date, the exact **re-runnable** run `cmd`, a
      pass/fail table read from the dashboard JSON's `lists[].tests[].state`, and a one-line
-     link back to `../../cards/<id>.md`.
+     link back to `../../cards/<id>.md`. **No commit hash** — credibility is re-runnability
+     on the branch (see the close-out note below), not a frozen SHA.
    - Then set the run entry's `artifact:` to that dir (not the `dump/` path).
    - **Derive the `validation.cmd`** from the `// RUN:` header at the top of `test.jsonnet`
-     (and confirm the result/branch/SHA against the matching `.test_history.json` row).
+     (and confirm the result/branch against the matching `.test_history.json` row).
    - Only flip `done` if the dashboard shows **all** tests `PASSED`; partial → keep
      `in_progress` and say which node is red.
 4. **Status:** a `fail` that blocks → consider `card-edit --status blocked` (or a `kind: debug`
@@ -73,5 +74,11 @@ A card's credibility lives in two linked things, both managed here:
   **child card under a `master-task`** (`card-add --parent`), not a step. (See SCHEMA.md.)
 - Both halves answer the credibility question: *can anyone re-derive this result?* The script
   says **how to check**; the runs say **what happened, on which branch**.
+- **Credibility = re-runnability on the named `branch`, NOT a commit hash.** Never record a SHA
+  on a run (or in a saved artifact's README). Runs happen on local, often-unpushed, often-dirty
+  trees, so a hash points at code nobody can reproduce — false precision that invites false
+  trust. Instead, keep the `validation` script **self-contained** (all inputs in-repo, no
+  private paths) so a PASS means *anyone* can check out the branch and reproduce it. That is the
+  close-gate for `done`. (See SCHEMA.md `validation`/`runs`.)
 - Per-branch health: same script, one run entry per dev branch. Old branch ✓ + new branch ✗ =
   a regression → also add a `kind: debug` step (`card-step`) for the debugging effort.
