@@ -192,6 +192,7 @@ def load_card(path):
         "created": strip_val(fm.get("created", "")),
         "updated": strip_val(fm.get("updated", "")),
         "order": order,
+        "stack": strip_val(fm.get("stack", "")) or None,
         "links": links,
         "result": (latest or {}).get("result", ""),
         "run": latest,
@@ -675,6 +676,46 @@ function renderStepStack(c){
   return stack;
 }
 
+// a stack of SEPARATE sibling cards sharing a `stack:` key — each is a FULL card (own bottom strip).
+// current/last (by order) on top; earlier cards tuck behind, dim. Visual mirror of renderStepStack,
+// but the layers are independent cards (independent validation) rather than steps of one file.
+function renderCardStack(cards){
+  const n=cards.length;
+  if(n===1) return renderNode(cards[0]);
+  const off=9;
+  const stack=document.createElement("div");
+  stack.className="stack";
+  stack.style.paddingBottom=((n-1)*off)+"px";
+  stack.style.paddingRight=((n-1)*6)+"px";
+  cards.forEach((c,i)=>{
+    const isTop=(i===n-1);
+    const el=cardFace(c);
+    if(isTop){ el.style.position="relative"; el.style.zIndex=20; }
+    else { el.classList.add("layer","dim"); el.style.zIndex=1+i; el.style.top=((i+1)*off)+"px"; el.style.left=((i+1)*6)+"px"; }
+    stack.appendChild(el);
+  });
+  const tog=document.createElement("div");
+  tog.className="stacktoggle"; tog.dataset.n=n; tog.dataset.noun="cards"; tog.textContent="⤢ "+n+" cards";
+  stack.appendChild(tog);
+  return stack;
+}
+
+// render a list of sibling cards into `into`, collapsing any that share a `stack:` key into ONE
+// card-stack (rendered at the position of the group's first member). Non-stacked cards render normally.
+function renderSiblings(cards, into){
+  const done={};
+  cards.forEach(c=>{
+    if(c.stack){
+      if(done[c.stack]) return;
+      done[c.stack]=1;
+      const grp=cards.filter(x=>x.stack===c.stack).slice().sort(byOrder);
+      into.appendChild(grp.length>1 ? renderCardStack(grp) : renderNode(grp[0]));
+    } else {
+      into.appendChild(renderNode(c));
+    }
+  });
+}
+
 function cardFace(c){
   const el=document.createElement("div");
   el.className="card"; el.dataset.id=c.id;
@@ -711,7 +752,7 @@ function clusterEl(c){
     `<span class="cprog">${ru.done}/${ru.total} done</span>`;
   const strip=document.createElement("div"); strip.className="strip4"; strip.style.background=col;
   const body=document.createElement("div"); body.className="cbody";
-  normalKids(c).forEach(k=>body.appendChild(renderNode(k)));
+  renderSiblings(normalKids(c), body);
   head.addEventListener("click",e=>{e.stopPropagation();openDrawer(c.id);});
   wrap.appendChild(strip); wrap.appendChild(head); wrap.appendChild(body);
   return wrap;
@@ -775,7 +816,7 @@ function buildBoard(){
       (inLane.length?`<div class="prog">${ru.done}/${ru.total} done</div><div class="bar"><i style="width:${pct}%"></i></div>`
                     :`<div class="prog">— roadmap —</div>`)+`</div>`;
     const body=document.createElement("div"); body.className="body";
-    roots.forEach(c=>body.appendChild(renderNode(c)));
+    renderSiblings(roots, body);
     lane.appendChild(body);
     board.appendChild(lane);
   });
@@ -822,7 +863,7 @@ function wireClicks(){
     const tog=e.target.closest(".stacktoggle");
     if(tog){ e.stopPropagation(); const stk=tog.closest(".stack");
       const ex=stk.classList.toggle("expanded");
-      tog.textContent = ex ? "⤡ collapse" : ("⤢ "+tog.dataset.n+" steps"); return; }
+      tog.textContent = ex ? "⤡ collapse" : ("⤢ "+tog.dataset.n+" "+(tog.dataset.noun||"steps")); return; }
     const dep=e.target.closest(".dep");
     if(dep){ e.stopPropagation(); flashCard(dep.dataset.dep); return; }
     const id=nodeIdAt(e.target);

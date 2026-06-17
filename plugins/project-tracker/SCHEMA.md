@@ -21,6 +21,7 @@ depends_on: [scaffold]         # optional. ids -> directed dependency edges (arr
 tags: [sparse, o0]             # optional. for filter/search
 priority: high                 # optional. high|med|low
 order: 30                      # optional. int board sort key (ascending); unset -> sorts by created
+stack: sparse-attn-o0          # optional. group key — sibling cards sharing it render as ONE stack
 created: 2026-05-30
 updated: 2026-06-03            # shown on node face
 links: { pr: 73399 }           # optional. pr | slack | doc | url ...
@@ -95,6 +96,15 @@ superseded_by: null
   Each child then self-validates (own bottom strip, own close-gate) and the master
   rolls up. Rule of thumb: *sub-stage validated at the end → `step`; sub-unit with
   its own verification → child card under a master-task.*
+- **stack (group separate cards into a visual stack)**: optional group key. Cards that share
+  the same `stack:` value (under the same parent) render as ONE **stack of cards** — ordered by
+  `order`, current/last on top, earlier ones tucked behind and dimmed. Same visual as a `steps[]`
+  stack, but **each layer is its own card with its own validation / bottom strip** (one green +
+  validated, the next red + script-MISSING, etc.). Use it when the sub-units of one deliverable
+  each need **independent verification** yet should still read as one grouped item — e.g. a
+  hyperfunction's `…-7b` compile card (validated) stacked with its `…-7c` integrate card (not
+  yet). Contrast with `steps[]`: steps = sub-stages in ONE file sharing the end-step validation;
+  `stack:` = separate files, each independently validated, drawn together.
 - **order**: optional integer. The board (`render.py`) sorts cards — and each
   master's children — by `order` ascending, falling back to `created` (then `id`)
   when unset. Use it to force a reading/step order (e.g. step1<step2<…); space
