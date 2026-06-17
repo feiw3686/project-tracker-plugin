@@ -29,7 +29,7 @@ The whole point is to make status-tracking **effortless**: every required-format
 ## 2. The card model
 
 - **One card = one markdown file** under `projects/<project>/cards/<id>.md`; the filename stem
-  is the card `id`. The schema is each project's `_schema.md`.
+  is the card `id`. The schema is canonical in the plugin (`SCHEMA.md`), shared by all projects.
 - Card **types**: `task`, `bug`, `milestone`, `decision`, `research`, `infra`, `master-task`.
 - **Relationships**:
   - `depends_on` — a hard dependency (X needs Y first).

@@ -66,6 +66,11 @@ A card's credibility lives in two linked things, both managed here:
 6. Report: script set and/or run logged, plus any status change.
 
 ## Notes
+- **One validation per card = the END step.** A card carries a single `validation`/`runs`;
+  on a stacked card the bottom strip renders only on the top (= current/end) step, so the
+  script validates the card's end step. Earlier steps are lightweight sub-stages, not
+  independently verified. If a sub-unit needs its own branch/cmd/validation, it belongs on a
+  **child card under a `master-task`** (`card-add --parent`), not a step. (See SCHEMA.md.)
 - Both halves answer the credibility question: *can anyone re-derive this result?* The script
   says **how to check**; the runs say **what happened, on which branch**.
 - Per-branch health: same script, one run entry per dev branch. Old branch ✓ + new branch ✗ =

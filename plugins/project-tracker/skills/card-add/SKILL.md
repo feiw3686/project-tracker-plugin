@@ -6,8 +6,9 @@ description: Add a new card (task/bug/milestone/decision/research/infra/master-t
 # card-add — add a NEW item to a project tracker
 
 Cards live at `/import/snvm-sc-scratch1/feiw/notes/projects/<project>/cards/<id>.md`.
-The filename stem **is** the `id`. The schema is in `<project>/_schema.md` — read it
-if unsure. The board (`_project2.html`) is a projection of these files.
+The filename stem **is** the `id`. The schema is in `${CLAUDE_PLUGIN_ROOT}/SCHEMA.md`
+(canonical, ships with the plugin) — read it if unsure. The board (`_project2.html`)
+is a projection of these files.
 
 ## STOP — new item, or a step of an existing one?
 
@@ -17,6 +18,10 @@ if unsure. The board (`_project2.html`) is a projection of these files.
 - A **sub-stage, a blocker, or the debugging** of an existing item ("X is blocked by…",
   "debug the failure in X", "the next stage of X", "X regressed on the new branch") →
   that is a **step of X's card**, NOT a new file. **Use the `card-step` skill instead.**
+  *Exception:* if that sub-unit needs its **own independent verification** (its own
+  branch / cmd / validation), it is not a step — make it a **child card under a
+  `master-task`** (this skill, with `--parent <master>`). Steps share the card's single
+  end-step validation; child cards each self-validate. (See SCHEMA.md → `steps`.)
 
 Heuristic: if the request references an existing card, it's almost certainly a step.
 Do not spawn a separate bug/debug card — that's the file-proliferation we're avoiding.
@@ -27,7 +32,7 @@ Do not spawn a separate bug/debug card — that's the file-proliferation we're a
 2. **id**: pick a short stable kebab-case slug (e.g. `m3-foo-bar`). It must be unique
    and is permanent (renaming breaks `depends_on`/`parent` edges). Check it doesn't
    already exist in `cards/`.
-3. **Gather fields** (see `_schema.md`):
+3. **Gather fields** (see `${CLAUDE_PLUGIN_ROOT}/SCHEMA.md`):
    - `title` (short), `type` (master-task|task|bug|milestone|decision|research|infra),
      `status` (todo|ready|in_progress|blocked|done|dropped, usually `todo`),
      `summary` (one line, <= ~80 chars — this is the node's third line),
@@ -56,7 +61,7 @@ Do not spawn a separate bug/debug card — that's the file-proliferation we're a
    `--milestone N` places the card in swimlane N (adds a `stepN` tag). A card also
    inherits its milestone from its `parent`. For richer cards (links, an initial run,
    a long body, a `steps:` stack), write the `.md` directly with the Edit/Write tools
-   following the `_schema.md` template (it stays group-writable — `new_card.py` forces
+   following the `SCHEMA.md` template (it stays group-writable — `new_card.py` forces
    664; if hand-editing, `umask 002` first), then regenerate (step 5).
 5. **Regenerate the board** (always, after any card change):
    ```

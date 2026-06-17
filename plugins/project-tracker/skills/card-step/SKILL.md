@@ -14,7 +14,10 @@ Use this skill (not `card-add`) whenever the work belongs to an item that alread
 ## Steps
 
 1. **Find the item's card** (by id or title; confirm if ambiguous). If the work is actually
-   a brand-new independent item, use `card-add` instead.
+   a brand-new independent item, use `card-add` instead. **And if the sub-unit needs its
+   OWN verification** (its own branch / cmd / validation), it is *not* a step — steps share
+   the card's single **end-step** validation. Make it a **child card under a `master-task`**
+   (`card-add --parent <master>`) so it self-validates. (See SCHEMA.md → `steps`.)
 2. **Append the step.** Easiest:
    ```
    python3 ${CLAUDE_PLUGIN_ROOT}/scripts/add_step.py \

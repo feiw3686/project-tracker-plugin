@@ -2,7 +2,7 @@
 
 Skills to create and maintain a markdown card-graph project tracker. Cards live
 at `/import/snvm-sc-scratch1/feiw/notes/projects/<project>/cards/<id>.md` (the
-filename stem is the card `id`); the schema is each project's `_schema.md`. The
+filename stem is the card `id`); the schema is canonical in this plugin (`SCHEMA.md`). The
 board (`<project>/_project2.html`) is a pure projection of these files.
 
 **Core model:** one md file = one work item. Its sub-stages and **debugging** are
