@@ -486,6 +486,7 @@ a{color:#2563eb;text-decoration:none} a:hover{text-decoration:underline}
 .card .foot{display:flex;align-items:center;gap:6px;margin-top:auto;padding-top:6px;flex-wrap:nowrap;overflow:hidden}
 .chip{font-size:10px;border-radius:4px;padding:1px 6px;background:#f1f5f9;color:#475569;white-space:nowrap}
 .chip.owner{background:#eef2ff;color:#4338ca}
+.chip.unassigned{background:#f8fafc;color:#94a3b8;border:1px dashed #cbd5e1}
 .chip.type{background:#f1f5f9;color:#64748b}
 .chip.todo{background:var(--wip-bg);color:#92400e}   /* deferred-TODO count on the card face */
 .badge{font-size:10px;font-weight:700}
@@ -554,6 +555,12 @@ a{color:#2563eb;text-decoration:none} a:hover{text-decoration:underline}
 #drawer .kv{font-size:12px;margin:2px 0}
 #drawer .body-md{font-size:12.5px;color:#374151;white-space:pre-wrap}
 #drawer .redtext{color:#dc2626;font-weight:600}
+/* inline owner assign control (the one editable field — writes back via the edit sidecar) */
+#drawer .ownerctl{display:flex;align-items:center;gap:8px;margin:4px 0 2px}
+#drawer #owner-select{font:inherit;padding:3px 7px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer}
+#drawer .owner-status{font-size:11px;color:var(--muted)}
+#drawer .owner-status.ok{color:#15803d}
+#drawer .owner-status.err{color:#b91c1c}
 /* deferred-TODO callout: amber box (planned work, not an error), drawn right after the
    verification-script section so it reads as a peer of it. .done flips it green. */
 #drawer .todoitem{font-size:12px;margin:6px 0;padding:7px 10px;border-radius:6px;
@@ -596,6 +603,10 @@ const MILESTONES = __MILESTONES__;
 const CARDS_DIR = "__CARDS_DIR__";
 const CARDS_ABS = "__CARDS_ABS__";   // absolute filesystem path of the cards/ dir (for "copy md path")
 const PR_URL_BASE = "__PR_URL_BASE__";
+const PROJECT = "__PROJECT__";          // project name (= dir under the projects root) for the edit sidecar
+const EDIT_PORT = "__EDIT_PORT__";      // tracker-edit sidecar port (beside markserv); see scripts/serve_edit.py
+// edit endpoint = same host as the served board, sidecar port. Empty when opened via file:// (no live edit).
+const EDIT_BASE = location.hostname ? (location.protocol+"//"+location.hostname+":"+EDIT_PORT) : "";
 
 const STATUS_LABELS = ["todo","ready","in_progress","blocked","done","dropped"];
 const COLORVAR = {todo:"--todo",ready:"--ready",in_progress:"--wip",blocked:"--blocked",done:"--done",dropped:"--dropped"};
@@ -605,6 +616,8 @@ const ICON = {"master-task":"▣",task:"▭",bug:"◆",milestone:"⬣",decision:
 const byId = {}; CARDS.forEach(c=>byId[c.id]=c);
 const children = {}; CARDS.forEach(c=>{ if(c.parent&&byId[c.parent]) (children[c.parent]=children[c.parent]||[]).push(c); });
 const blocks = {}; CARDS.forEach(c=>c.depends_on.forEach(d=>{ (blocks[d]=blocks[d]||[]).push(c.id); }));
+// distinct known owners (for the assign dropdown); empty owner = Unassigned, not listed here.
+const OWNERS = [...new Set(CARDS.map(c=>c.owner).filter(Boolean))].sort();
 // sort within a group by `order` (ascending), then created, then id — matches embed.js.
 const byOrder=(a,b)=>{const oa=a.order==null?1e9:a.order, ob=b.order==null?1e9:b.order;
   if(oa!==ob) return oa-ob; return (a.created||"").localeCompare(b.created||"")||a.id.localeCompare(b.id);};
@@ -764,13 +777,74 @@ function renderSiblings(cards, into){
   });
 }
 
+// owner chip: assigned -> @name (indigo); unassigned -> dashed grey "⊘ unassigned" (a real,
+// claimable state, visually distinct from "forgot to set"). Class .ownerchip so a live assign
+// can swap it in place without a full rebuild.
+function ownerChip(c){
+  return c.owner
+    ? `<span class="chip owner ownerchip">@${esc(c.owner)}</span>`
+    : `<span class="chip unassigned ownerchip" title="Unassigned — open the card to assign an owner">⊘ unassigned</span>`;
+}
+// dropdown options for the drawer's assign control: Unassigned + known owners (+ current value if
+// it's a one-off not already in the list) + an "Other…" free-text escape hatch.
+function ownerOptions(c){
+  const cur=c.owner||"";
+  const list=OWNERS.slice();
+  if(cur && list.indexOf(cur)<0) list.push(cur);
+  list.sort();
+  const opts=[`<option value=""${cur===""?" selected":""}>⊘ Unassigned</option>`];
+  list.forEach(o=>opts.push(`<option value="${esc(o)}"${o===cur?" selected":""}>${esc(o)}</option>`));
+  opts.push(`<option value="__other__">＋ Other…</option>`);
+  return opts.join("");
+}
+function metaHTML(c){
+  const col=cssvar(COLORVAR[c.status]||"--todo");
+  return [`<span class="pill" style="background:${col}">${esc(c.status)}</span>`,
+    `<span class="chip type">${esc(c.type)}</span>`,
+    c.type!=="master-task"?ownerChip(c):"",   // master-tasks roll up — no owner concept
+    c.milestone!=null?`<span class="chip">step ${c.milestone}</span>`:`<span class="chip">unscheduled</span>`].join("");
+}
+// assign flow: dropdown change -> (maybe prompt for free text) -> POST to the edit sidecar ->
+// on success update in-memory + the face chip + drawer meta (no full rebuild).
+function assignOwner(id, val){
+  const sel=document.getElementById("owner-select");
+  if(val==="__other__"){
+    const t=prompt("Owner (free text). Leave blank for Unassigned:", "");
+    if(t===null){ if(sel) sel.value=(byId[id].owner||""); return; }   // cancelled
+    val=t.trim();
+  }
+  postAssign(id, val);
+}
+function postAssign(id, owner){
+  const st=document.getElementById("owner-status");
+  const sel=document.getElementById("owner-select");
+  if(!EDIT_BASE){ if(st){st.textContent="⚠ editing only works on the served board (not file://)";st.className="owner-status err";} return; }
+  if(st){ st.textContent="saving…"; st.className="owner-status"; }
+  fetch(EDIT_BASE+"/assign",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({project:PROJECT,id:id,owner:owner})})
+    .then(r=>r.json().then(j=>({ok:r.ok,j})))
+    .then(({ok,j})=>{
+      if(!ok||!j||!j.ok) throw new Error((j&&j.error)||"save failed");
+      byId[id].owner=j.owner||"";
+      if(byId[id].owner && OWNERS.indexOf(byId[id].owner)<0){ OWNERS.push(byId[id].owner); OWNERS.sort(); }
+      refreshOwnerUI(id);
+      if(pinned===id) refreshDrawerMeta(byId[id]);
+      if(st){ st.textContent=byId[id].owner?("✓ assigned to "+byId[id].owner):"✓ unassigned"; st.className="owner-status ok"; }
+    })
+    .catch(e=>{ if(st){st.textContent="⚠ "+e.message;st.className="owner-status err";} if(sel) sel.value=(byId[id].owner||""); });
+}
+function refreshOwnerUI(id){
+  const c=byId[id];
+  document.querySelectorAll(`.card[data-id="${CSS.escape(id)}"] .ownerchip`).forEach(el=>{ el.outerHTML=ownerChip(c); });
+}
+function refreshDrawerMeta(c){ const m=document.getElementById("d-meta"); if(m) m.innerHTML=metaHTML(c); }
+
 function cardFace(c){
   const el=document.createElement("div");
   el.className="card"; el.dataset.id=c.id;
   el.style.background=cssvar(BGVAR[c.status]||"--todo-bg");
   const col=cssvar(COLORVAR[c.status]||"--todo");
-  let foot="";
-  if(c.owner) foot+=`<span class="chip owner">@${esc(c.owner)}</span>`;
+  let foot=ownerChip(c);
   foot+=`<span class="chip type">${esc(c.type)}</span>`;
   const opentodo=(c.todos||[]).filter(t=>String(t.done||"").toLowerCase()!=="true").length;
   if(opentodo) foot+=`<span class="chip todo" title="${esc(opentodo+" deferred TODO"+(opentodo>1?"s":"")+" — open the card to read")}">⏳ ${opentodo}</span>`;
@@ -935,18 +1009,19 @@ function flashCard(id){
 function openDrawer(id){
   const c=byId[id]; if(!c) return;
   document.getElementById("d-title").textContent=c.title;
-  const col=cssvar(COLORVAR[c.status]||"--todo");
-  const meta=[`<span class="pill" style="background:${col}">${esc(c.status)}</span>`,
-    `<span class="chip type">${esc(c.type)}</span>`,
-    c.owner?`<span class="chip owner">@${esc(c.owner)}</span>`:"",
-    c.milestone!=null?`<span class="chip">step ${c.milestone}</span>`:`<span class="chip">unscheduled</span>`].join("");
-  document.getElementById("d-meta").innerHTML=meta;
+  document.getElementById("d-meta").innerHTML=metaHTML(c);
   let h="";
   if(c.summary) h+=`<div class="kv">${esc(c.summary)}</div>`;
   h+=`<h3>identity</h3><div class="kv"><b>id</b> ${esc(c.id)}`;
   if(c.parent) h+=` · <b>parent</b> <a onclick="openDrawer('${esc(c.parent)}')">${esc(c.parent)}</a>`;
   if(c.updated) h+=` · <b>updated</b> ${esc(c.updated)}`+(c.updated_by?` by ${esc(c.updated_by)}`:"");
   h+=`</div>`;
+  // owner assign — the one editable field. Writes back to the .md via the edit sidecar.
+  if(c.type!=="master-task"){
+    h+=`<h3>owner</h3><div class="ownerctl">`+
+       `<select id="owner-select" onchange="assignOwner('${esc(c.id)}', this.value)">${ownerOptions(c)}</select>`+
+       `<span id="owner-status" class="owner-status"></span></div>`;
+  }
   if(c.steps&&c.steps.length){
     h+=`<h3>steps</h3>`+c.steps.map((s,i)=>{
       const st=s.status||"";
@@ -1106,7 +1181,7 @@ openFromHash();   // deep-link: open the card named in the URL hash, if any
 """
 
 
-def build_html(cards, cards_dir, overview_html, config, cards_abs=""):
+def build_html(cards, cards_dir, overview_html, config, cards_abs="", project="", edit_port="8766"):
     payload = json.dumps(cards, ensure_ascii=False)
     ms = json.dumps(config["milestones"])
     gen = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -1119,6 +1194,8 @@ def build_html(cards, cards_dir, overview_html, config, cards_abs=""):
     html = html.replace("__GENERATED__", gen)
     html = html.replace("__TITLE__", _html.escape(config["title"], quote=False))
     html = html.replace("__PR_URL_BASE__", config["pr_url_base"])
+    html = html.replace("__PROJECT__", project)
+    html = html.replace("__EDIT_PORT__", str(edit_port))
     return html
 
 
@@ -1134,11 +1211,14 @@ def main():
     cards_path = os.path.join(proj, args.cards_dir)
     project_md = os.path.join(proj, "_project.md")
     out = args.out or os.path.join(proj, "_project2.html")
+    project = os.path.basename(proj.rstrip("/"))            # dir name = project key for the edit sidecar
+    edit_port = os.environ.get("TRACKER_EDIT_PORT", "8766")
 
     cards = load_cards(cards_path)
     overview = load_overview(project_md)
     config = load_project_config(project_md)
-    html = build_html(cards, args.cards_dir, overview, config, cards_abs=cards_path)
+    html = build_html(cards, args.cards_dir, overview, config, cards_abs=cards_path,
+                      project=project, edit_port=edit_port)
     with open(out, "w", encoding="utf-8") as f:
         f.write(html)
 

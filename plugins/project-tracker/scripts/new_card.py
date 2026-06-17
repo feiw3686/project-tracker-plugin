@@ -62,9 +62,14 @@ def main():
 
     fm = ["---", f"id: {a.id}", f"title: {a.title}", f"type: {a.type}",
           f"status: {a.status}", f'summary: "{a.summary}"']
+    # owner is the ASSIGNEE (who does the work). New cards default to UNASSIGNED — omit the
+    # line entirely unless a taker is explicitly given (--owner); assign later inline on the
+    # board. updated_by reflects the creator / last editor, which is NOT ownership.
     if a.owner:
         fm.append(f"owner: {a.owner}")
-    fm.append(f"updated_by: {a.updated_by or a.owner}")
+    ub = a.updated_by or a.owner
+    if ub:
+        fm.append(f"updated_by: {ub}")
     if a.parent:
         fm.append(f"parent: {a.parent}")
     if deps:

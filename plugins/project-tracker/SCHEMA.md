@@ -14,7 +14,7 @@ title: Sparse-attn O0 lowering # REQUIRED. short, shown on node line 1
 type: task                     # REQUIRED. master-task|task|bug|milestone|decision|research|infra  -> NODE SHAPE
 status: in_progress            # REQUIRED. todo|ready|in_progress|blocked|done|dropped              -> NODE COLOR
 summary: "one-line what/why"   # REQUIRED. node face line 3 (<= ~80 chars). authored, not auto.
-owner: feiw                    # ASSIGNEE — who does the work (NOT the creator). see note below.
+owner: feiw                    # ASSIGNEE — who does the work (NOT the creator). OMIT = Unassigned. see note.
 updated_by: feiw               # last toucher (shown on node face)
 parent: sparse-attn            # optional. the master-task this card decomposes (nests under it)
 depends_on: [scaffold]         # optional. ids -> directed dependency edges (arrow dep -> dependent)
@@ -71,6 +71,14 @@ superseded_by: null
   `updated_by`. `owner` may be a single person or a comma-list (`"a, b, c"`) for shared
   work; it renders as the `@owner` chip on the node face and is matched by the `@` search
   filter. If work is ever delegated, just change `owner` — don't add a second person field.
+- **Unassigned is a real state (the default for new cards).** Omit `owner` (or leave it
+  empty) to mean *unclaimed* — `card-add` defaults to this; don't auto-assign the creator.
+  An unowned card renders a distinct dashed grey **`⊘ unassigned`** chip (not a blank), so a
+  claimable card is visually obvious. **Owners are editable inline on the board:** the card
+  drawer has an owner dropdown (known owners + Unassigned + free-text) that writes the change
+  back to this `owner:` line via the edit sidecar (`scripts/serve_edit.py`, run beside markserv
+  — see `notes/.serve/`). It is the *only* inline-editable field; everything else is edited in
+  the `.md`.
 - **master-task**: not worked on directly. Has no `runs`/`validation` of its own.
   Its `status` + node face are **rolled up** from children (children set
   `parent: <this-id>`): face shows progress (e.g. `3/7 done`), color is the

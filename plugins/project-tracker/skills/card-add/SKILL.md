@@ -35,8 +35,12 @@ Do not spawn a separate bug/debug card — that's the file-proliferation we're a
 3. **Gather fields** (see `${CLAUDE_PLUGIN_ROOT}/SCHEMA.md`):
    - `title` (short), `type` (master-task|task|bug|milestone|decision|research|infra),
      `status` (todo|ready|in_progress|blocked|done|dropped, usually `todo`),
-     `summary` (one line, <= ~80 chars — this is the node's third line),
-     `owner`, `updated_by`.
+     `summary` (one line, <= ~80 chars — this is the node's third line), `updated_by`.
+   - **`owner` (assignee) — leave UNASSIGNED by default.** Do NOT default it to yourself or
+     the requester. Omit `--owner` so the card starts unclaimed (it renders a dashed
+     `⊘ unassigned` chip, and is assignable inline on the board). Only pass `--owner X` when
+     a taker is genuinely already decided. `updated_by` is the creator/last-editor — that is
+     not ownership.
    - Optional: `parent` (if it's a piece of a master-task), `depends_on` (ids it
      needs first), `tags`, `priority`, `links` (pr/slack/doc), `runs`.
    - **`validation` (verification script) — set this on every non-master card.**
@@ -68,7 +72,8 @@ Do not spawn a separate bug/debug card — that's the file-proliferation we're a
    python3 ${CLAUDE_PLUGIN_ROOT}/scripts/regen.py <project>
    ```
    (`new_card.py` already does this.) The board is `<project>/_project2.html`.
-6. Tell the user the card id + that the board is updated (viewable on markserv).
+6. Tell the user the card id + that the board is updated (viewable on markserv). New cards are
+   **Unassigned** — mention they can assign an owner inline from the card drawer on the board.
 
 ## Notes
 - One card = one unit of work a person would pick up (or, for master-task, a theme
