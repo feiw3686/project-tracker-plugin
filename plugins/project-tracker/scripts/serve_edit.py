@@ -27,7 +27,14 @@ import os
 import re
 import subprocess
 import sys
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer
+try:                                                # py3.7+
+    from http.server import ThreadingHTTPServer
+except ImportError:                                 # py3.6 (e.g. RHEL8 system python) — compose it
+    from socketserver import ThreadingMixIn
+
+    class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
+        daemon_threads = True
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 RENDER = os.path.join(HERE, "render.py")
