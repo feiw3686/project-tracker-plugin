@@ -22,11 +22,14 @@ Env:  TRACKER_PROJECTS_ROOT (default /import/snvm-sc-scratch1/feiw/notes/project
       TRACKER_EDIT_PORT      (default 8766)
 """
 import datetime
+import hashlib
 import json
 import os
 import re
 import subprocess
 import sys
+import threading
+import urllib.parse
 from http.server import BaseHTTPRequestHandler, HTTPServer
 try:                                                # py3.7+
     from http.server import ThreadingHTTPServer
@@ -43,8 +46,20 @@ PROJECTS_ROOT = os.path.realpath(
 )
 PORT = int(os.environ.get("TRACKER_EDIT_PORT", "8766"))
 
+# the meeting-notes renderer = the SAME markdown renderer the board's overview uses (one
+# implementation). Importing render.py is side-effect-free (its main() is guarded).
+sys.path.insert(0, HERE)
+try:
+    from render import md_to_html
+except Exception:                                   # pragma: no cover — degrade to raw text
+    md_to_html = None
+
 SAFE = re.compile(r"^[A-Za-z0-9._-]+$")          # project / id slugs — no slashes, no traversal
 FM_RE = re.compile(r"^(---\s*\n)(.*?\n)(---\s*\n)(.*)$", re.DOTALL)
+
+# meeting notes: one rolling file per project. Only this name is writable via /note (v1).
+NOTE_NAMES = {"_meeting"}
+NOTE_LOCK = threading.Lock()                      # serialize note read-modify-write in-process
 
 
 def sanitize_owner(raw):
@@ -129,6 +144,80 @@ def apply_assign(project, card_id, owner):
     return {"ok": True, "id": card_id, "owner": owner, "regen": regen_ok}
 
 
+# ---- meeting notes (one rolling _meeting.md per project) ----------------------------------
+
+def resolve_project(project):
+    if not SAFE.match(project or ""):
+        raise ValueError("bad project")
+    proj = os.path.realpath(os.path.join(PROJECTS_ROOT, project))
+    if os.path.commonpath([proj, PROJECTS_ROOT]) != PROJECTS_ROOT or not os.path.isdir(proj):
+        raise ValueError("unknown project")
+    return proj
+
+
+def note_path(project, name):
+    if name not in NOTE_NAMES:
+        raise ValueError("bad note name")
+    proj = resolve_project(project)
+    path = os.path.realpath(os.path.join(proj, name + ".md"))
+    if os.path.commonpath([path, proj]) != proj:
+        raise ValueError("bad note path")
+    return path
+
+
+def _note_version(text):
+    return hashlib.sha1(text.encode("utf-8")).hexdigest()[:16] if text else "0"
+
+
+def _render_md(text):
+    if md_to_html:
+        try:
+            return md_to_html(text)
+        except Exception:
+            pass
+    import html as _h
+    return "<pre>" + _h.escape(text) + "</pre>"
+
+
+def get_note(project, name):
+    path = note_path(project, name)
+    text = ""
+    if os.path.isfile(path):
+        with open(path, "r", encoding="utf-8") as f:
+            text = f.read()
+    return {"ok": True, "name": name, "text": text,
+            "version": _note_version(text), "html": _render_md(text)}
+
+
+def save_note(project, name, text, base_version):
+    if not isinstance(text, str):
+        raise ValueError("text must be a string")
+    if len(text) > 2_000_000:                          # ~2 MB sanity cap
+        raise ValueError("note too large")
+    path = note_path(project, name)
+    with NOTE_LOCK:                                    # serialize read-modify-write
+        cur = ""
+        if os.path.isfile(path):
+            with open(path, "r", encoding="utf-8") as f:
+                cur = f.read()
+        cur_version = _note_version(cur)
+        # optimistic concurrency: reject a save built on a stale version (don't clobber)
+        if base_version is not None and base_version != cur_version:
+            return {"ok": False, "conflict": True, "text": cur,
+                    "version": cur_version, "html": _render_md(cur)}
+        old_umask = os.umask(0o002)
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(text)
+        finally:
+            os.umask(old_umask)
+        try:
+            os.chmod(path, 0o664)                       # stay group-writable
+        except OSError:
+            pass
+    return {"ok": True, "name": name, "version": _note_version(text), "html": _render_md(text)}
+
+
 class Handler(BaseHTTPRequestHandler):
     def _cors(self):
         self.send_header("Access-Control-Allow-Origin", "*")
@@ -150,18 +239,34 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        if self.path.split("?")[0] == "/health":
+        route = self.path.split("?")[0]
+        if route == "/health":
             return self._json(200, {"ok": True, "service": "tracker-edit", "root": PROJECTS_ROOT})
+        if route == "/note":
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            try:
+                res = get_note(q.get("project", [""])[0], q.get("name", ["_meeting"])[0])
+                return self._json(200, res)
+            except ValueError as e:
+                return self._json(400, {"ok": False, "error": str(e)})
+            except Exception as e:                      # noqa: BLE001
+                return self._json(500, {"ok": False, "error": str(e)})
         self._json(404, {"ok": False, "error": "not found"})
 
     def do_POST(self):
-        if self.path.split("?")[0] != "/assign":
+        route = self.path.split("?")[0]
+        if route not in ("/assign", "/note"):
             return self._json(404, {"ok": False, "error": "not found"})
         try:
             n = int(self.headers.get("Content-Length", "0"))
             req = json.loads(self.rfile.read(n) or b"{}")
-            res = apply_assign(req.get("project", ""), req.get("id", ""), req.get("owner", ""))
-            self._json(200, res)
+            if route == "/assign":
+                res = apply_assign(req.get("project", ""), req.get("id", ""), req.get("owner", ""))
+                return self._json(200, res)
+            # /note — base_version omitted => unconditional write (first save / forced overwrite)
+            res = save_note(req.get("project", ""), req.get("name", "_meeting"),
+                            req.get("text", ""), req.get("base_version"))
+            self._json(409 if res.get("conflict") else 200, res)
         except ValueError as e:
             self._json(400, {"ok": False, "error": str(e)})
         except Exception as e:                          # noqa: BLE001 — surface anything else as 500

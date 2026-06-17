@@ -19,6 +19,9 @@ Layout = the design in DESIGN.md:
   * depends_on -> "needs:" chips (click to flash the target)
   * click any card -> a detail drawer (status, owner, deps, latest run cmd/artifact,
     PR link, body, "open source .md") + a copy-link button (deep-link to the card)
+  * a "Meeting notes" button (by the overview) opens a LEFT, non-modal, editable drawer on
+    the project's rolling _meeting.md (Edit/Preview rendered markdown; saved via the edit
+    sidecar, autosave + optimistic-version conflict guard). Coexists with the card drawer.
 
 Milestone is derived from each card's own `stepN` tag, inherited through `parent`
 chains — fully data-driven, independent of any other tracker's hand map.
@@ -576,12 +579,41 @@ a{color:#2563eb;text-decoration:none} a:hover{text-decoration:underline}
 #drawer .body-md details.codefold[open]>summary::before{content:"\\25BC  "}
 #drawer .body-md details.codefold>pre{margin:0;border:none;border-top:1px solid var(--line);border-radius:0 0 6px 6px;max-height:360px;overflow:auto}
 .pill{display:inline-block;font-size:10px;font-weight:700;color:#fff;border-radius:10px;padding:1px 9px}
+
+/* meeting-notes button (by "Project overview") + LEFT drawer (non-modal; coexists w/ card drawer) */
+.topline{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.notesbtn{font:inherit;font-size:12px;cursor:pointer;border:1px solid #c7d2fe;background:#eef2ff;
+  color:#4338ca;border-radius:6px;padding:4px 10px;white-space:nowrap}
+.notesbtn:hover{background:#e0e7ff}
+.notesbtn.on{background:#4338ca;color:#fff;border-color:#4338ca}
+#notesdrawer{position:fixed;top:0;left:0;height:100%;width:min(460px,46vw);background:#fff;z-index:95;
+  box-shadow:4px 0 22px rgba(0,0,0,.2);transform:translateX(-100%);transition:transform .18s ease;
+  display:flex;flex-direction:column}
+#notesdrawer.on{transform:translateX(0)}
+#notesdrawer .ndhead{padding:12px 16px;border-bottom:1px solid var(--line)}
+#notesdrawer .ndhead .x{float:right;cursor:pointer;color:var(--muted);font-size:20px;line-height:1}
+#notesdrawer .ndhead h2{font-size:15px;margin:0 26px 8px 0}
+#notesdrawer .ndtabs{display:flex;align-items:center;gap:6px}
+#notesdrawer .ndtabs button{font:inherit;font-size:12px;cursor:pointer;border:1px solid var(--line);
+  background:#f8fafc;color:#475569;border-radius:6px;padding:3px 12px}
+#notesdrawer .ndtabs button.active{background:#4338ca;color:#fff;border-color:#4338ca}
+#notesdrawer .nd-status{margin-left:auto;font-size:11px;color:var(--muted)}
+#notesdrawer .nd-status.ok{color:#15803d}
+#notesdrawer .nd-status.err{color:#b91c1c}
+#notesdrawer .ndbody{flex:1;min-height:0;display:flex;flex-direction:column}
+#notesdrawer textarea{flex:1;width:100%;border:none;outline:none;resize:none;padding:14px 16px;
+  font:12.5px/1.6 ui-monospace,Menlo,Consolas,monospace;color:#111827;background:#fff}
+/* preview reuses the overview markdown child styles (.ov-body h2/ul/table/…) but drops its box */
+#notesdrawer .note-md{flex:1;overflow:auto;max-width:none;max-height:none;border:none;border-radius:0;
+  margin:0;padding:6px 16px 16px;background:#fff}
+#notesdrawer.mode-preview textarea{display:none}
+#notesdrawer.mode-edit .note-md{display:none}
 </style>
 </head>
 <body>
 <div class="topbar">
   <h1>__TITLE__ <span class="sub">milestone board · independent view · generated __GENERATED__</span></h1>
-  <details id="overview"><summary>Project overview</summary><div class="ov-body">__GLOBALS__</div></details>
+  <div class="topline"><details id="overview"><summary>Project overview</summary><div class="ov-body">__GLOBALS__</div></details><button id="notesbtn" class="notesbtn" onclick="toggleNotes()" title="Open the live meeting notes (editable, shared)">📝 Meeting notes</button></div>
   <div class="controls">
     <input id="filter" placeholder="filter: text · status:blocked · type:bug · @frankc · #sparse · result:fail">
     <div class="legend" id="legend"></div>
@@ -595,6 +627,22 @@ a{color:#2563eb;text-decoration:none} a:hover{text-decoration:underline}
 <div id="drawer">
   <div class="dhead"><span class="x" onclick="closeDrawer()">×</span><h2 id="d-title"></h2><div class="meta" id="d-meta"></div><div class="dlinks"><span class="copylink" id="d-copylink" onclick="copyCardLink()"><span>🔗</span><span id="d-copylink-label">Copy link</span></span><a class="copylink" id="d-opensrc" target="_blank"><span>📄</span><span>open .md</span></a><span class="copylink" id="d-copypath" onclick="copyCardPath()"><span>📋</span><span id="d-copypath-label">Copy md path</span></span></div></div>
   <div class="dbody" id="d-body"></div>
+</div>
+
+<div id="notesdrawer" class="mode-preview">
+  <div class="ndhead">
+    <span class="x" onclick="closeNotes()">×</span>
+    <h2>📝 Meeting notes</h2>
+    <div class="ndtabs">
+      <button id="nd-edit-tab" onclick="setNotesMode('edit')">Edit</button>
+      <button id="nd-prev-tab" class="active" onclick="setNotesMode('preview')">Preview</button>
+      <span id="nd-status" class="nd-status"></span>
+    </div>
+  </div>
+  <div class="ndbody">
+    <textarea id="nd-textarea" spellcheck="false" oninput="onNoteInput()" placeholder="Type meeting notes in markdown… (shared, live)"></textarea>
+    <div id="nd-preview" class="ov-body note-md"></div>
+  </div>
 </div>
 
 <script>
@@ -1133,6 +1181,97 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape")closeDrawer();});
 // open a card from the URL hash on load (and on back/forward navigation)
 function openFromHash(){const m=/^#card-(.+)$/.exec(location.hash);if(m){const id=decodeURIComponent(m[1]);if(byId[id]){openDrawer(id);flashCard(id);}}}
 window.addEventListener("hashchange",openFromHash);
+
+// ---- meeting notes drawer (LEFT, non-modal, editable; coexists with the card drawer) ----
+const NOTE_NAME="_meeting";
+let notesOpen=false, notesMode="preview", notesVer=null, notesDirty=false,
+    notesSaveTimer=null, notesPollTimer=null, notesOnline=true;
+const ndEl=()=>document.getElementById("notesdrawer");
+function ndStatus(msg,cls){const s=document.getElementById("nd-status");
+  if(s){ s.textContent=msg||""; s.className="nd-status"+(cls?(" "+cls):""); }}
+function nowhm(){const t=new Date();
+  return String(t.getHours()).padStart(2,"0")+":"+String(t.getMinutes()).padStart(2,"0");}
+function toggleNotes(){ notesOpen?closeNotes():openNotes(); }
+function openNotes(){
+  notesOpen=true;
+  ndEl().classList.add("on");
+  document.getElementById("notesbtn").classList.add("on");
+  setNotesMode("preview");
+  loadNote();
+  if(!notesPollTimer) notesPollTimer=setInterval(pollNote,4000);   // live-refresh for viewers
+}
+function closeNotes(){
+  if(notesDirty) saveNote();      // flush pending edits
+  notesOpen=false;
+  ndEl().classList.remove("on");
+  document.getElementById("notesbtn").classList.remove("on");
+  if(notesPollTimer){ clearInterval(notesPollTimer); notesPollTimer=null; }
+}
+function setNotesMode(m){
+  if(m==="preview" && notesMode==="edit" && notesDirty) saveNote();  // save before showing preview
+  notesMode=m;
+  const d=ndEl();
+  d.classList.toggle("mode-edit",m==="edit");
+  d.classList.toggle("mode-preview",m==="preview");
+  document.getElementById("nd-edit-tab").classList.toggle("active",m==="edit");
+  document.getElementById("nd-prev-tab").classList.toggle("active",m==="preview");
+  if(m==="edit" && notesOnline){ const ta=document.getElementById("nd-textarea"); ta.focus(); }
+}
+function applyNote(d){
+  document.getElementById("nd-textarea").value=d.text||"";
+  document.getElementById("nd-preview").innerHTML=d.html||"";
+  notesVer=d.version; notesDirty=false;
+}
+function goOffline(){
+  notesOnline=false;
+  document.getElementById("nd-textarea").setAttribute("readonly","");
+  ndStatus("editing offline — notes server unreachable","err");
+}
+function loadNote(){
+  if(!EDIT_BASE){ goOffline(); return; }
+  fetch(EDIT_BASE+"/note?project="+encodeURIComponent(PROJECT)+"&name="+NOTE_NAME)
+    .then(r=>r.json()).then(d=>{ if(!d.ok) throw new Error(d.error||"load failed");
+      notesOnline=true; document.getElementById("nd-textarea").removeAttribute("readonly");
+      applyNote(d); ndStatus("",""); })
+    .catch(()=>goOffline());
+}
+function onNoteInput(){
+  if(!notesOnline) return;
+  notesDirty=true; ndStatus("editing…","");
+  if(notesSaveTimer) clearTimeout(notesSaveTimer);
+  notesSaveTimer=setTimeout(()=>saveNote(),1500);     // debounced autosave
+}
+function saveNote(){
+  if(!notesOnline || !EDIT_BASE) return;
+  if(notesSaveTimer){ clearTimeout(notesSaveTimer); notesSaveTimer=null; }
+  const text=document.getElementById("nd-textarea").value;
+  ndStatus("saving…","");
+  return fetch(EDIT_BASE+"/note",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({project:PROJECT,name:NOTE_NAME,text:text,base_version:notesVer})})
+    .then(r=>r.json().then(d=>({code:r.status,d})))
+    .then(({code,d})=>{
+      if(code===409) return onNoteConflict(d);
+      if(!d.ok) throw new Error(d.error||"save failed");
+      notesVer=d.version; notesDirty=false;
+      document.getElementById("nd-preview").innerHTML=d.html||"";
+      ndStatus("saved ✓ "+nowhm(),"ok");
+    })
+    .catch(e=>ndStatus("⚠ "+e.message,"err"));
+}
+function onNoteConflict(d){
+  // someone else saved since we loaded — let the scribe choose (don't silently clobber).
+  const loadTheirs=confirm("Meeting notes changed elsewhere.\n\n"+
+    "OK = load the latest (discard your unsaved text)\nCancel = overwrite with your version");
+  if(loadTheirs){ applyNote(d); ndStatus("loaded latest",""); }
+  else { notesVer=d.version; return saveNote(); }   // retry as an overwrite of current
+}
+function pollNote(){
+  if(!notesOpen || notesDirty || !notesOnline || !EDIT_BASE) return;
+  fetch(EDIT_BASE+"/note?project="+encodeURIComponent(PROJECT)+"&name="+NOTE_NAME)
+    .then(r=>r.json()).then(d=>{ if(d.ok && d.version!==notesVer && !notesDirty){
+      applyNote(d); ndStatus("updated "+nowhm(),""); } })
+    .catch(()=>{});
+}
 
 function buildChrome(){
   const lg=document.getElementById("legend");
