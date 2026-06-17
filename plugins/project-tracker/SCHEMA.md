@@ -14,7 +14,7 @@ title: Sparse-attn O0 lowering # REQUIRED. short, shown on node line 1
 type: task                     # REQUIRED. master-task|task|bug|milestone|decision|research|infra  -> NODE SHAPE
 status: in_progress            # REQUIRED. todo|ready|in_progress|blocked|done|dropped              -> NODE COLOR
 summary: "one-line what/why"   # REQUIRED. node face line 3 (<= ~80 chars). authored, not auto.
-owner: feiw                    # responsible person
+owner: feiw                    # ASSIGNEE — who does the work (NOT the creator). see note below.
 updated_by: feiw               # last toucher (shown on node face)
 parent: sparse-attn            # optional. the master-task this card decomposes (nests under it)
 depends_on: [scaffold]         # optional. ids -> directed dependency edges (arrow dep -> dependent)
@@ -65,6 +65,12 @@ superseded_by: null
   `decision`=parallelogram, `research`=ellipse, `infra`=cylinder.
 - **status -> color**: todo=grey, ready=blue, in_progress=amber, blocked=red,
   done=green, dropped=faded.
+- **owner = assignee (who does the work), NOT the creator.** There is deliberately no
+  `creator` field: in practice the tracker maintainer opens nearly every card, so a
+  creator would carry ~no signal and is already derivable from `created` + git history /
+  `updated_by`. `owner` may be a single person or a comma-list (`"a, b, c"`) for shared
+  work; it renders as the `@owner` chip on the node face and is matched by the `@` search
+  filter. If work is ever delegated, just change `owner` — don't add a second person field.
 - **master-task**: not worked on directly. Has no `runs`/`validation` of its own.
   Its `status` + node face are **rolled up** from children (children set
   `parent: <this-id>`): face shows progress (e.g. `3/7 done`), color is the
