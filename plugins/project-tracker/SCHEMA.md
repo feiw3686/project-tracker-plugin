@@ -116,3 +116,24 @@ superseded_by: null
 - `id` is kebab-case and stable — renaming breaks `depends_on`/`parent` edges.
 - One card per unit of work that a person would pick up and do (or, for
   `master-task`, a theme that decomposes into such units).
+
+## Body formatting (rendered in the card drawer)
+
+The free-form body supports a small markdown subset in the drawer's *notes* panel:
+
+- `[[other-id]]` → link to that card; `[text](url)` → external link.
+- `` `code` ``, `**bold**`.
+- `!!text!!` → **red emphasis** — use for warnings (e.g. `!!NOT A REAL PASS CHECK YET!!`).
+  Also works in `validation.pass_criteria`.
+- A fenced code block ```` ```lang title ```` renders as a **default-collapsed dropdown**
+  whose summary is the `title` after the language token (typically a filename). Put the
+  dropdown right after the line that first names the script, e.g.:
+
+  ````
+  Save this as `run_x.sh`:
+  ```bash run_x.sh
+  #!/usr/bin/env bash
+  ...
+  ```
+  ````
+  Long embedded scripts stay folded so the body reads cleanly; click to expand.

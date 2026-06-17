@@ -547,6 +547,14 @@ a{color:#2563eb;text-decoration:none} a:hover{text-decoration:underline}
   word-break:break-word;font:11.5px/1.5 ui-monospace,Menlo,Consolas,monospace;margin:0}
 #drawer .kv{font-size:12px;margin:2px 0}
 #drawer .body-md{font-size:12.5px;color:#374151;white-space:pre-wrap}
+#drawer .redtext{color:#dc2626;font-weight:600}
+#drawer code{background:#f1f5f9;padding:1px 4px;border-radius:3px;font-size:11px}
+#drawer .body-md details.codefold{margin:8px 0;border:1px solid var(--line);border-radius:6px;background:#f8fafc;white-space:normal}
+#drawer .body-md details.codefold>summary{cursor:pointer;padding:6px 10px;font:600 11.5px ui-monospace,Menlo,Consolas,monospace;color:#334155;list-style:none;user-select:none}
+#drawer .body-md details.codefold>summary::-webkit-details-marker{display:none}
+#drawer .body-md details.codefold>summary::before{content:"\\25B6  ";color:var(--muted);font-size:10px}
+#drawer .body-md details.codefold[open]>summary::before{content:"\\25BC  "}
+#drawer .body-md details.codefold>pre{margin:0;border:none;border-top:1px solid var(--line);border-radius:0 0 6px 6px;max-height:360px;overflow:auto}
 .pill{display:inline-block;font-size:10px;font-weight:700;color:#fff;border-radius:10px;padding:1px 9px}
 </style>
 </head>
@@ -593,6 +601,33 @@ function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","
 // card links are authored relative to cards/<id>.md, but this page sits at the project
 // root. Rebase relative links onto CARDS_DIR; the browser normalizes any ../ itself.
 function rebase(url){ if(!url) return url; if(/^[a-z]+:/i.test(url)||url.startsWith("/")||url.startsWith("#")) return url; return (CARDS_DIR?CARDS_DIR+"/":"")+url; }
+
+// inline formatting shared by body prose + pass_criteria: escape, then [[card]] + [text](url)
+// links, !!red!! emphasis, `code`, **bold**. (Order: links before code/bold so URLs stay intact.)
+function fmtInline(s){
+  return esc(s)
+    .replace(/\[\[([a-z0-9-]+)\]\]/g,(m,id)=>byId[id]?`<a onclick="openDrawer('${id}')">${id}</a>`:m)
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g,(m,txt,url)=>`<a href="${rebase(url)}" target="_blank">${txt}</a>`)
+    .replace(/!!([^!]+)!!/g,(m,t)=>`<span class="redtext">${t}</span>`)
+    .replace(/`([^`]+)`/g,(m,t)=>`<code>${t}</code>`)
+    .replace(/\*\*([^*]+)\*\*/g,(m,t)=>`<strong>${t}</strong>`);
+}
+// body: fold fenced code blocks ```lang [title]\n...\n``` into DEFAULT-COLLAPSED <details>
+// (summary = the title after the language token, e.g. a filename); prose between fences is
+// formatted with fmtInline. Plain text keeps pre-wrap via the .body-md container.
+function renderBody(raw){
+  const re=/```([^\n]*)\n([\s\S]*?)```/g;
+  let out="", last=0, m;
+  while((m=re.exec(raw))){
+    out+=fmtInline(raw.slice(last,m.index).replace(/\n+$/,""));
+    const info=m[1].trim(), sp=info.indexOf(" ");
+    const title=(sp>=0?info.slice(sp+1):(info||"code")).trim();
+    out+=`<details class="codefold"><summary>${esc(title)}</summary><pre><code>${esc(m[2].replace(/\n$/,""))}</code></pre></details>`;
+    last=re.lastIndex;
+  }
+  out+=fmtInline(raw.slice(last).replace(/^\n+/,""));
+  return out;
+}
 
 function normalKids(c){return (children[c.id]||[]).filter(k=>k.type!=="bug");}
 function bugKids(c){return (children[c.id]||[]).filter(k=>k.type==="bug");}
@@ -924,7 +959,7 @@ function openDrawer(id){
       const v=c.validation||{};
       h+=`<pre>${esc(v.cmd)}</pre>`;
       if(v.branch) h+=`<div class="kv" style="margin-top:6px"><b>branch</b> <code>${esc(v.branch)}</code></div>`;
-      if(v.pass_criteria) h+=`<div class="kv"><b>pass</b> ${esc(v.pass_criteria)}</div>`;
+      if(v.pass_criteria) h+=`<div class="kv"><b>pass</b> ${fmtInline(v.pass_criteria)}</div>`;
     } else {
       const closed=(c.status==="done"||c.status==="dropped");
       h+=`<div class="kv" style="color:#b91c1c"><b>⚠ Verification Script MISSING.</b> `+
@@ -952,10 +987,7 @@ function openDrawer(id){
   if(c.links.url) linkbits.push(`<a href="${esc(c.links.url)}" target="_blank">link</a>`);
   if(linkbits.length) h+=`<h3>links</h3><div class="kv">${linkbits.join(" · ")}</div>`;
   if(c.body){
-    const bodyHtml=esc(c.body)
-      .replace(/\[\[([a-z0-9-]+)\]\]/g,(m,id)=>byId[id]?`<a onclick="openDrawer('${id}')">${id}</a>`:m)
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g,(m,txt,url)=>`<a href="${rebase(url)}" target="_blank">${txt}</a>`);
-    h+=`<h3>notes</h3><div class="body-md">${bodyHtml}</div>`;
+    h+=`<h3>notes</h3><div class="body-md">${renderBody(c.body)}</div>`;
   }
   document.getElementById("d-body").innerHTML=h;
   // reset the copy-link button to its default state for this card
