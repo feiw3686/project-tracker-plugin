@@ -1,6 +1,6 @@
 {
   "name": "project-tracker",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Maintain a markdown card-graph project tracker from Claude Code: card-add (new item), card-step (sub-stages/debug as a stack), card-verify (verification script + per-branch runs), card-edit (status/links/metadata).",
   "author": {
     "name": "Fei Wang",

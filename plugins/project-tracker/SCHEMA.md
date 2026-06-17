@@ -46,6 +46,11 @@ runs:                          # optional. node face shows the LATEST; hover sho
     cmd: "python3 ..."
     artifact: /import/.../run.0.log
     note: "short result note"
+todo:                          # optional. DEFERRED follow-ups — highlighted in the drawer right
+  - text: "the deferred work, one line"   #   after the verification script; face shows a ⏳N chip.
+    why: "optional: why it's deferred / what it's blocked on"
+    done: false                #   optional. true -> the item flips green (✓) instead of amber (⏳)
+  # bare-string form also works:  `- "just the text"`
 # fusion/split-ready (no tooling yet; schema supports it):
 supersedes: []                 # ids this card merges/replaces
 superseded_by: null
@@ -96,6 +101,13 @@ superseded_by: null
   Each child then self-validates (own bottom strip, own close-gate) and the master
   rolls up. Rule of thumb: *sub-stage validated at the end → `step`; sub-unit with
   its own verification → child card under a master-task.*
+- **todo (deferred follow-ups)**: optional list of follow-up items that are *known and intended but
+  deliberately not done now* (e.g. a better approach blocked on another change). Each item has `text`
+  (one line; `` `code` ``/`**bold**`/`[[card]]` work), optional `why` (why deferred / what it's blocked
+  on), and optional `done` (true → the item flips green). Rendered as a **highlighted amber callout in
+  the card drawer, right after the verification script** (so it reads as a peer of it), and the card
+  face shows a `⏳N` chip (N = open items). Use it instead of burying follow-ups in the body prose —
+  the body is for notes/findings, `todo` is for actionable deferred work that must stay visible.
 - **stack (group separate cards into a visual stack)**: optional group key. Cards that share
   the same `stack:` value (under the same parent) render as ONE **stack of cards** — ordered by
   `order`, current/last on top, earlier ones tucked behind and dimmed. Same visual as a `steps[]`

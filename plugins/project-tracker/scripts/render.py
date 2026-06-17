@@ -92,30 +92,29 @@ def parse_frontmatter(fm_text):
     fm = {}
     runs = []
     steps = []
+    todos = []
     validation = {}
-    cur = None          # current run item
-    cur_step = None     # current step item
-    mode = None         # None | "runs" | "steps" | "val"
+    lists = {"runs": runs, "steps": steps, "todo": todos}
+    cur_item = None     # current list item (run / step / todo)
+    mode = None         # None | "runs" | "steps" | "todo" | "val"
     for raw in fm_text.split("\n"):
-        if mode in ("runs", "steps"):
-            lst = runs if mode == "runs" else steps
+        if mode in lists:
+            lst = lists[mode]
             mitem = re.match(r"^\s+-\s*(.*)$", raw)
             if mitem:
                 item = {}
                 lst.append(item)
-                if mode == "runs":
-                    cur = item
-                else:
-                    cur_step = item
+                cur_item = item
                 rest = mitem.group(1)
                 mk = re.match(r"^([\w-]+):\s*(.*)$", rest)
                 if mk:
                     item[mk.group(1)] = strip_val(mk.group(2))
+                else:
+                    item["text"] = strip_val(rest)  # bare-string item (e.g. `- some text`)
                 continue
-            target = cur if mode == "runs" else cur_step
             mfield = re.match(r"^\s+([\w-]+):\s*(.*)$", raw)
-            if mfield and target is not None:
-                target[mfield.group(1)] = strip_val(mfield.group(2))
+            if mfield and cur_item is not None:
+                cur_item[mfield.group(1)] = strip_val(mfield.group(2))
                 continue
             if not raw.strip():
                 continue
@@ -138,6 +137,9 @@ def parse_frontmatter(fm_text):
         if re.match(r"^steps:\s*$", raw):
             mode = "steps"
             continue
+        if re.match(r"^todo:\s*$", raw):
+            mode = "todo"
+            continue
         if re.match(r"^validation:\s*$", raw):
             mode = "val"
             continue
@@ -146,6 +148,7 @@ def parse_frontmatter(fm_text):
             fm[m.group(1)] = m.group(2).strip()
     fm["_runs"] = runs
     fm["_steps"] = steps
+    fm["_todos"] = todos
     fm["_validation"] = validation
     return fm
 
@@ -157,6 +160,7 @@ def load_card(path):
     fm = parse_frontmatter(fm_text)
     runs = fm.pop("_runs", [])
     steps = fm.pop("_steps", [])
+    todos = fm.pop("_todos", [])
     latest = runs[-1] if runs else None
     # per-branch health: latest run result per branch, in first-seen (chronological) order.
     # drives the card's bottom strip (one segment per dev branch the verification ran on).
@@ -198,6 +202,7 @@ def load_card(path):
         "run": latest,
         "branch_runs": branch_runs,
         "steps": steps,
+        "todos": todos,
         "validation": validation,
         "has_verification": has_verification,
         "needs_verification": ctype != "master-task",
@@ -482,6 +487,7 @@ a{color:#2563eb;text-decoration:none} a:hover{text-decoration:underline}
 .chip{font-size:10px;border-radius:4px;padding:1px 6px;background:#f1f5f9;color:#475569;white-space:nowrap}
 .chip.owner{background:#eef2ff;color:#4338ca}
 .chip.type{background:#f1f5f9;color:#64748b}
+.chip.todo{background:var(--wip-bg);color:#92400e}   /* deferred-TODO count on the card face */
 .badge{font-size:10px;font-weight:700}
 .badge.pass{color:#15803d} .badge.fail{color:#b91c1c} .badge.partial{color:#a16207}
 .dep{font-size:10px;color:#2563eb;cursor:pointer}
@@ -548,6 +554,13 @@ a{color:#2563eb;text-decoration:none} a:hover{text-decoration:underline}
 #drawer .kv{font-size:12px;margin:2px 0}
 #drawer .body-md{font-size:12.5px;color:#374151;white-space:pre-wrap}
 #drawer .redtext{color:#dc2626;font-weight:600}
+/* deferred-TODO callout: amber box (planned work, not an error), drawn right after the
+   verification-script section so it reads as a peer of it. .done flips it green. */
+#drawer .todoitem{font-size:12px;margin:6px 0;padding:7px 10px;border-radius:6px;
+  background:var(--wip-bg);border-left:3px solid var(--wip);color:#92400e}
+#drawer .todoitem.done{background:var(--done-bg);border-left-color:var(--done);color:#166534}
+#drawer .todoitem .todowhy{color:#78716c;font-weight:400}
+#drawer .todoitem code{background:#fef3c7}
 #drawer code{background:#f1f5f9;padding:1px 4px;border-radius:3px;font-size:11px}
 #drawer .body-md details.codefold{margin:8px 0;border:1px solid var(--line);border-radius:6px;background:#f8fafc;white-space:normal}
 #drawer .body-md details.codefold>summary{cursor:pointer;padding:6px 10px;font:600 11.5px ui-monospace,Menlo,Consolas,monospace;color:#334155;list-style:none;user-select:none}
@@ -759,6 +772,8 @@ function cardFace(c){
   let foot="";
   if(c.owner) foot+=`<span class="chip owner">@${esc(c.owner)}</span>`;
   foot+=`<span class="chip type">${esc(c.type)}</span>`;
+  const opentodo=(c.todos||[]).filter(t=>String(t.done||"").toLowerCase()!=="true").length;
+  if(opentodo) foot+=`<span class="chip todo" title="${esc(opentodo+" deferred TODO"+(opentodo>1?"s":"")+" — open the card to read")}">⏳ ${opentodo}</span>`;
   if(c.result==="pass") foot+=`<span class="badge pass">✓</span>`;
   else if(c.result==="fail") foot+=`<span class="badge fail">✗</span>`;
   else if(c.result==="partial") foot+=`<span class="badge partial">~</span>`;
@@ -967,6 +982,14 @@ function openDrawer(id){
                  : `Required before this card can be closed, and re-run on each new dev branch to detect regressions.`)+
          `</div>`;
     }
+  }
+  if(c.todos&&c.todos.length){
+    h+=`<h3>todo · deferred</h3>`;
+    h+=c.todos.map(t=>{
+      const done=String(t.done||"").toLowerCase()==="true";
+      const why=t.why?` <span class="todowhy">— ${fmtInline(t.why)}</span>`:"";
+      return `<div class="todoitem${done?" done":""}">${done?"✓":"⏳"} <b>${fmtInline(t.text||"")}</b>${why}</div>`;
+    }).join("");
   }
   if(c.branch_runs&&c.branch_runs.length){
     h+=`<h3>branch health</h3>`+c.branch_runs.map(s=>{
