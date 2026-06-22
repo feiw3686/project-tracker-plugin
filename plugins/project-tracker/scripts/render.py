@@ -1200,10 +1200,21 @@ function copyNoteLink(e){
   if(e) e.preventDefault();
   const url=new URL(NOTE_NAME+".md", location.href).href;   // markserv renders the .md as a standalone page
   const done=()=>ndStatus("link copied ✓ "+nowhm(),"ok");
+  // navigator.clipboard only exists in a secure context (HTTPS/localhost); this board is plain HTTP,
+  // so fall back to the execCommand textarea trick — no extra popup.
   if(navigator.clipboard && navigator.clipboard.writeText){
-    navigator.clipboard.writeText(url).then(done).catch(()=>window.prompt("Copy this link:",url));
-  } else { window.prompt("Copy this link:",url); }
+    navigator.clipboard.writeText(url).then(done).catch(()=>execCopy(url,done));
+  } else { execCopy(url,done); }
   return false;
+}
+function execCopy(text,done){
+  const ta=document.createElement("textarea");
+  ta.value=text; ta.setAttribute("readonly","");
+  ta.style.position="fixed"; ta.style.top="-9999px";
+  document.body.appendChild(ta); ta.select();
+  let ok=false; try{ ok=document.execCommand("copy"); }catch(_){}
+  document.body.removeChild(ta);
+  if(ok) done(); else window.prompt("Copy this link:",text);
 }
 function openNotes(){
   notesOpen=true;
