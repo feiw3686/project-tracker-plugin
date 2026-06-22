@@ -586,7 +586,7 @@ a{color:#2563eb;text-decoration:none} a:hover{text-decoration:underline}
   color:#4338ca;border-radius:6px;padding:4px 10px;white-space:nowrap}
 .notesbtn:hover{background:#e0e7ff}
 .notesbtn.on{background:#4338ca;color:#fff;border-color:#4338ca}
-#notesdrawer{position:fixed;top:0;left:0;height:100%;width:min(460px,46vw);background:#fff;z-index:95;
+#notesdrawer{position:fixed;top:0;left:0;height:100%;width:min(920px,88vw);background:#fff;z-index:95;
   box-shadow:4px 0 22px rgba(0,0,0,.2);transform:translateX(-100%);transition:transform .18s ease;
   display:flex;flex-direction:column}
 #notesdrawer.on{transform:translateX(0)}
