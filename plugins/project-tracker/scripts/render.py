@@ -597,6 +597,9 @@ a{color:#2563eb;text-decoration:none} a:hover{text-decoration:underline}
 #notesdrawer .ndtabs button{font:inherit;font-size:12px;cursor:pointer;border:1px solid var(--line);
   background:#f8fafc;color:#475569;border-radius:6px;padding:3px 12px}
 #notesdrawer .ndtabs button.active{background:#4338ca;color:#fff;border-color:#4338ca}
+#notesdrawer .ndtabs a.nd-share{font:inherit;font-size:12px;cursor:pointer;border:1px solid #c7d2fe;
+  background:#eef2ff;color:#4338ca;border-radius:6px;padding:3px 10px;text-decoration:none;white-space:nowrap}
+#notesdrawer .ndtabs a.nd-share:hover{background:#e0e7ff;text-decoration:none}
 #notesdrawer .nd-status{margin-left:auto;font-size:11px;color:var(--muted)}
 #notesdrawer .nd-status.ok{color:#15803d}
 #notesdrawer .nd-status.err{color:#b91c1c}
@@ -636,6 +639,7 @@ a{color:#2563eb;text-decoration:none} a:hover{text-decoration:underline}
     <div class="ndtabs">
       <button id="nd-edit-tab" onclick="setNotesMode('edit')">Edit</button>
       <button id="nd-prev-tab" class="active" onclick="setNotesMode('preview')">Preview</button>
+      <a id="nd-share" class="nd-share" href="_meeting.md" target="_blank" onclick="return copyNoteLink(event)" title="Copy a shareable link to these meeting notes (rendered by markserv)">🔗 Copy link</a>
       <span id="nd-status" class="nd-status"></span>
     </div>
   </div>
@@ -1192,6 +1196,15 @@ function ndStatus(msg,cls){const s=document.getElementById("nd-status");
 function nowhm(){const t=new Date();
   return String(t.getHours()).padStart(2,"0")+":"+String(t.getMinutes()).padStart(2,"0");}
 function toggleNotes(){ notesOpen?closeNotes():openNotes(); }
+function copyNoteLink(e){
+  if(e) e.preventDefault();
+  const url=new URL(NOTE_NAME+".md", location.href).href;   // markserv renders the .md as a standalone page
+  const done=()=>ndStatus("link copied ✓ "+nowhm(),"ok");
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(url).then(done).catch(()=>window.prompt("Copy this link:",url));
+  } else { window.prompt("Copy this link:",url); }
+  return false;
+}
 function openNotes(){
   notesOpen=true;
   ndEl().classList.add("on");
