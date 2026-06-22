@@ -1216,6 +1216,7 @@ function execCopy(text,done){
   document.body.removeChild(ta);
   if(ok) done(); else window.prompt("Copy this link:",text);
 }
+function rememberNotesOpen(v){ try{localStorage.setItem("m3board:notesOpen:"+PROJECT, v?"1":"0");}catch(_){} }
 function openNotes(){
   notesOpen=true;
   ndEl().classList.add("on");
@@ -1223,6 +1224,7 @@ function openNotes(){
   setNotesMode("preview");
   loadNote();
   if(!notesPollTimer) notesPollTimer=setInterval(pollNote,4000);   // live-refresh for viewers
+  rememberNotesOpen(true);
 }
 function closeNotes(){
   if(notesDirty) saveNote();      // flush pending edits
@@ -1230,6 +1232,7 @@ function closeNotes(){
   ndEl().classList.remove("on");
   document.getElementById("notesbtn").classList.remove("on");
   if(notesPollTimer){ clearInterval(notesPollTimer); notesPollTimer=null; }
+  rememberNotesOpen(false);
 }
 function setNotesMode(m){
   if(m==="preview" && notesMode==="edit" && notesDirty) saveNote();  // save before showing preview
@@ -1338,6 +1341,22 @@ buildChrome();
 buildBoard();
 document.getElementById("filter").addEventListener("input",applyFilter);
 openFromHash();   // deep-link: open the card named in the URL hash, if any
+
+// ---- persist fold/unfold state across reloads (the board auto-refreshes; don't
+//      re-fold the Project overview / meeting notes out from under a reader) ----
+(function persistUI(){
+  const lsGet=k=>{try{return localStorage.getItem(k);}catch(_){return null;}};
+  const lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(_){}};
+  // Project overview <details>
+  const ov=document.getElementById("overview");
+  if(ov){
+    const K="m3board:overviewOpen:"+PROJECT;
+    if(lsGet(K)==="1") ov.open=true;
+    ov.addEventListener("toggle",()=>lsSet(K, ov.open?"1":"0"));
+  }
+  // meeting-notes drawer (reopen if it was open before the reload)
+  if(lsGet("m3board:notesOpen:"+PROJECT)==="1" && typeof openNotes==="function") openNotes();
+})();
 </script>
 </body>
 </html>
